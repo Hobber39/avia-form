@@ -131,8 +131,8 @@
 
 <!-- desktop / QA fallback box -->
 <div id="fallback" class="card">
-  <div class="sec-title">Скопируй и отправь боту</div>
-  <p class="sec-note">Telegram не обнаружен. Скопируй текст и отправь его боту @Little_avia_bot.</p>
+  <div class="sec-title">Почти готово — отправь команду боту</div>
+  <p class="sec-note">Команда скопирована в буфер. Закрой это окно (× вверху), вставь её в чат с ботом @Little_avia_bot и нажми «Отправить» — бот выполнит поиск.</p>
   <textarea id="fallbackText" readonly></textarea>
   <button id="copyBtn">📋 Копировать</button>
 </div>
@@ -722,20 +722,20 @@
       alertMsg("Слишком много данных, убери часть направлений.");
       return;
     }
-    if(WA && WA.openTelegramLink){
-      try{ if(WA.HapticFeedback) WA.HapticFeedback.impactOccurred("medium"); }catch(e){}
-      WA.openTelegramLink("https://t.me/"+BOT+"?text="+encodeURIComponent(text));
-    } else {
-      showFallback(text);
-    }
+    try{ if(WA && WA.HapticFeedback) WA.HapticFeedback.impactOccurred("medium"); }catch(e){}
+    // Telegram игнорирует ?text= для ботов, поэтому надёжный путь — показать команду и скопировать в буфер.
+    var copied=false;
+    try{ if(navigator.clipboard){ navigator.clipboard.writeText(text); copied=true; } }catch(e){}
+    showFallback(text, copied);
   }
   function alertMsg(m){
     if(WA && WA.showAlert){ try{ WA.showAlert(m); return; }catch(e){} }
     alert(m);
   }
-  function showFallback(text){
+  function showFallback(text, copied){
     var box=$("fallback"); box.style.display="block";
     $("fallbackText").value=text;
+    var btn=$("copyBtn"); if(btn){ btn.textContent = copied ? "✅ Скопировано" : "📋 Копировать"; }
     box.scrollIntoView({behavior:"smooth", block:"start"});
   }
   $("copyBtn").addEventListener("click", function(){
