@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Поиск авиабилетов</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    /* sensible light fallbacks; overridden by Telegram theme vars at runtime */
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #1a1a1a);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --link: var(--tg-theme-link-color, #2481cc);
+    --btn: var(--tg-theme-button-color, #2481cc);
+    --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    --secbg: var(--tg-theme-secondary-bg-color, #f1f1f4);
+    --section-sep: var(--tg-theme-section-separator-color, rgba(128,128,128,.18));
+    --radius: 12px;
+    --tap: 44px;
+    --amber: #d98300;
+    --danger: #d9534f;
+    --ok: #2e9e4f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: var(--tg-theme-bg-color, #17212b);
+      --text: var(--tg-theme-text-color, #f5f5f5);
+      --hint: var(--tg-theme-hint-color, #95a3b3);
+      --link: var(--tg-theme-link-color, #6ab3f3);
+      --btn: var(--tg-theme-button-color, #5288c1);
+      --btn-text: var(--tg-theme-button-text-color, #ffffff);
+      --secbg: var(--tg-theme-secondary-bg-color, #232e3c);
+      --section-sep: var(--tg-theme-section-separator-color, rgba(255,255,255,.10));
+    }
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg); color:var(--text);
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding: 12px 12px 120px;
+    max-width: 640px; margin: 0 auto;
+  }
+  h1{ font-size:20px; margin:6px 2px 4px; }
+  .lead{ color:var(--hint); font-size:13px; margin:0 2px 14px; }
+  .card{
+    background:var(--secbg); border-radius:var(--radius);
+    padding:14px; margin:0 0 14px;
+  }
+  .card > .sec-title{ font-weight:600; font-size:15px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .sec-note{ color:var(--hint); font-size:12px; margin:0 0 12px; }
+  label.fld{ display:block; font-size:13px; color:var(--hint); margin:0 0 4px; }
+  input[type=text], input[type=number]{
+    width:100%; height:var(--tap); padding:0 12px; font-size:16px;
+    background:var(--bg); color:var(--text);
+    border:1px solid var(--section-sep); border-radius:10px; outline:none;
+  }
+  input:focus{ border-color:var(--link); }
+  .err{ color:var(--danger); font-size:12px; margin:4px 2px 0; min-height:1px; }
+  /* segmented control */
+  .seg{ display:flex; gap:6px; background:var(--bg); border:1px solid var(--section-sep); border-radius:12px; padding:4px; }
+  .seg button{
+    flex:1; min-height:var(--tap); border:0; border-radius:9px; cursor:pointer;
+    background:transparent; color:var(--text); font-size:14px; font-weight:500; padding:0 6px;
+  }
+  .seg button.on{ background:var(--btn); color:var(--btn-text); }
+  /* chips */
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip{
+    min-height:var(--tap); padding:0 16px; border-radius:22px; cursor:pointer;
+    border:1px solid var(--section-sep); background:var(--bg); color:var(--text);
+    font-size:15px; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .chip.on{ background:var(--btn); color:var(--btn-text); border-color:var(--btn); }
+  /* stepper */
+  .stepper{ display:flex; align-items:center; gap:0; width:fit-content; border:1px solid var(--section-sep); border-radius:12px; overflow:hidden; background:var(--bg); }
+  .stepper button{ width:var(--tap); height:var(--tap); font-size:22px; border:0; background:transparent; color:var(--text); cursor:pointer; }
+  .stepper .val{ min-width:54px; text-align:center; font-size:18px; font-weight:600; }
+  /* country list */
+  .ctrlrow{ display:flex; gap:8px; align-items:center; margin:0 0 10px; }
+  .ctrlrow input[type=text]{ flex:1; }
+  .counter{ font-size:13px; color:var(--hint); margin:0 0 10px; }
+  .counter.warn{ color:var(--amber); font-weight:600; }
+  .region{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--hint); margin:14px 0 6px; }
+  .region:first-child{ margin-top:2px; }
+  .crow{ border-bottom:1px solid var(--section-sep); }
+  .crow:last-child{ border-bottom:0; }
+  .crow-head{ display:flex; align-items:center; gap:8px; padding:8px 0; min-height:var(--tap); }
+  .crow-head .name{ flex:1; font-size:15px; }
+  .crow-head .star{ font-size:20px; cursor:pointer; opacity:.4; line-height:1; user-select:none; }
+  .crow-head .star.fav{ opacity:1; }
+  .crow-head .exp{ background:transparent; border:0; color:var(--link); font-size:13px; cursor:pointer; padding:6px 4px; }
+  .cbwrap{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  .cbwrap input{ width:20px; height:20px; accent-color:var(--btn); }
+  .airports{ display:none; padding:2px 0 10px 30px; }
+  .airports.open{ display:block; }
+  .aprow{ display:flex; align-items:center; gap:8px; padding:6px 0; min-height:36px; }
+  .aprow .ap-name{ font-size:14px; }
+  .aprow .iata{ color:var(--hint); font-size:12px; }
+  .prim{ color:var(--amber); font-size:11px; margin-left:4px; }
+  .hidden{ display:none !important; }
+  .presets{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 0; }
+  .preset{ font-size:13px; padding:8px 12px; border-radius:18px; border:1px solid var(--section-sep); background:var(--bg); color:var(--link); cursor:pointer; }
+  .two{ display:flex; gap:10px; }
+  .two > div{ flex:1; }
+  .collapse-head{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+  .collapse-head .chev{ color:var(--hint); transition:transform .15s; }
+  .collapse-head.open .chev{ transform:rotate(90deg); }
+  .collapse-body{ display:none; margin-top:12px; }
+  .collapse-body.open{ display:block; }
+  /* fallback box */
+  #fallback{ display:none; margin:0 0 14px; }
+  #fallback textarea{ width:100%; min-height:90px; font:13px/1.4 monospace; padding:10px; border-radius:10px; border:1px solid var(--section-sep); background:var(--bg); color:var(--text); }
+  #fallback button{ margin-top:8px; height:var(--tap); padding:0 18px; border:0; border-radius:10px; background:var(--btn); color:var(--btn-text); font-size:15px; cursor:pointer; }
+  /* desktop submit fallback (when no MainButton) */
+  #domBtn{
+    display:none; position:fixed; left:0; right:0; bottom:0; z-index:50;
+    width:100%; height:54px; border:0; background:var(--btn); color:var(--btn-text);
+    font-size:17px; font-weight:600; cursor:pointer;
+  }
+  #domBtn:disabled{ opacity:.45; }
+  .mini{ font-size:12px; color:var(--hint); }
+  .row-gap{ margin-top:10px; }
+</style>
+</head>
+<body>
+
+<h1>✈️ Поиск авиабилетов</h1>
+<p class="lead">Заполни форму и нажми «Искать». Откроется чат — нажми «Отправить», чтобы запустить поиск.</p>
+
+<!-- desktop / QA fallback box -->
+<div id="fallback" class="card">
+  <div class="sec-title">Скопируй и отправь боту</div>
+  <p class="sec-note">Telegram не обнаружен. Скопируй текст и отправь его боту @Little_avia_bot.</p>
+  <textarea id="fallbackText" readonly></textarea>
+  <button id="copyBtn">📋 Копировать</button>
+</div>
+
+<!-- 1. Origin -->
+<div class="card">
+  <div class="sec-title">📍 Откуда</div>
+  <label class="fld" for="origin">Город вылета (IATA)</label>
+  <input type="text" id="origin" list="airportList" value="TLV" autocomplete="off" inputmode="text" maxlength="3" placeholder="TLV">
+  <datalist id="airportList"></datalist>
+  <div class="err" id="originErr"></div>
+</div>
+
+<!-- 2. Destinations -->
+<div class="card">
+  <div class="sec-title">🎯 Куда (избранные направления)</div>
+  <p class="sec-note">Отметь «вся страна» или раскрой список и выбери конкретные аэропорты.</p>
+  <div class="ctrlrow">
+    <input type="text" id="filter" placeholder="🔍 Найти страну…" autocomplete="off">
+  </div>
+  <div class="counter" id="counter">выбрано аэропортов: 0</div>
+  <div id="countryList"></div>
+</div>
+
+<!-- 3. Duration -->
+<div class="card" id="durCard">
+  <div class="sec-title">📅 Длительность поездки</div>
+  <p class="sec-note">Сколько дней пробыть (можно несколько вариантов).</p>
+  <div class="chips" id="durChips"></div>
+  <div class="row-gap" id="durCustomWrap" style="display:none">
+    <label class="fld" for="durCustom">Своё значение (дней)</label>
+    <input type="number" id="durCustom" min="1" max="60" inputmode="numeric" placeholder="напр. 12">
+  </div>
+  <div class="err" id="durErr"></div>
+</div>
+
+<!-- 4. Passengers -->
+<div class="card">
+  <div class="sec-title">👥 Пассажиры</div>
+  <div class="stepper" data-stepper="pax">
+    <button type="button" data-d="-1">−</button>
+    <div class="val" id="paxVal">1</div>
+    <button type="button" data-d="1">+</button>
+  </div>
+</div>
+
+<!-- 5. Stops -->
+<div class="card">
+  <div class="sec-title">🔁 Пересадки</div>
+  <div class="seg" id="stopsSeg">
+    <button type="button" data-v="0">Прямые</button>
+    <button type="button" data-v="1">1 пересадка</button>
+    <button type="button" data-v="any" class="on">Любые</button>
+  </div>
+</div>
+
+<!-- 6. Dates -->
+<div class="card">
+  <div class="sec-title">🗓 Даты</div>
+  <div class="seg" id="dateModeSeg">
+    <button type="button" data-v="r" class="on">Диапазон</button>
+    <button type="button" data-v="h">Горизонт</button>
+  </div>
+  <div id="rangeBox" class="row-gap">
+    <div class="two">
+      <div>
+        <label class="fld" for="dfrom">с (ММ-ДД)</label>
+        <input type="text" id="dfrom" placeholder="07-01" maxlength="5" inputmode="numeric" autocomplete="off">
+      </div>
+      <div>
+        <label class="fld" for="dto">по (ММ-ДД)</label>
+        <input type="text" id="dto" placeholder="08-31" maxlength="5" inputmode="numeric" autocomplete="off">
+      </div>
+    </div>
+    <div class="presets" id="datePresets">
+      <button type="button" class="preset" data-from="07-01" data-to="08-31">Июль–август</button>
+      <button type="button" class="preset" data-from="06-01" data-to="06-30">Июнь</button>
+      <button type="button" class="preset" data-from="09-01" data-to="09-30">Сентябрь</button>
+      <button type="button" class="preset" data-horizon="90">Ближайшие 90 дней</button>
+    </div>
+    <div class="err" id="rangeErr"></div>
+  </div>
+  <div id="horizonBox" class="row-gap" style="display:none">
+    <label class="fld" for="horizon">На сколько дней вперёд искать</label>
+    <input type="number" id="horizon" min="1" max="365" value="90" inputmode="numeric">
+    <div class="err" id="horizonErr"></div>
+  </div>
+</div>
+
+<!-- 7. Price -->
+<div class="card">
+  <div class="sec-title">💰 Цена</div>
+  <div class="seg" id="priceSeg">
+    <button type="button" data-v="c" class="on">Самые дешёвые</button>
+    <button type="button" data-v="t">Порог ₪/чел</button>
+  </div>
+  <div id="thrBox" class="row-gap" style="display:none">
+    <label class="fld" for="maxprice">Максимальная цена за человека (₪)</label>
+    <input type="number" id="maxprice" min="1" inputmode="numeric" placeholder="напр. 800">
+    <div class="err" id="thrErr"></div>
+  </div>
+  <div class="row-gap">
+    <label class="fld">Сколько показать вариантов</label>
+    <div class="stepper" data-stepper="topn">
+      <button type="button" data-d="-1">−</button>
+      <div class="val" id="topnVal">5</div>
+      <button type="button" data-d="1">+</button>
+    </div>
+  </div>
+</div>
+
+<!-- 8. Trip type -->
+<div class="card">
+  <div class="sec-title">↔️ Тип поездки</div>
+  <div class="seg" id="tripSeg">
+    <button type="button" data-v="1" class="on">Туда-обратно</button>
+    <button type="button" data-v="0">В одну сторону</button>
+  </div>
+</div>
+
+<!-- 9. AI model (collapsed) -->
+<div class="card">
+  <div class="collapse-head" id="modelHead">
+    <div class="sec-title" style="margin:0">🤖 Модель ИИ (для чата с ботом)</div>
+    <span class="chev">▶</span>
+  </div>
+  <div class="collapse-body" id="modelBody">
+    <p class="sec-note" style="margin-top:0">Влияет только на общение с ботом, не на поиск.</p>
+    <div class="seg" id="modelSeg">
+      <button type="button" data-v="g" class="on">Gemini (беспл.)</button>
+      <button type="button" data-v="o">OpenAI gpt-5-mini</button>
+    </div>
+  </div>
+</div>
+
+<button id="domBtn" disabled>🔎 Искать</button>
+
+<script>
+"use strict";
+(function(){
+  /* ---------- Telegram bootstrap ---------- */
+  var WA = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  var BOT = "Little_avia_bot";
+  if (WA){
+    try{ WA.ready(); WA.expand(); }catch(e){}
+  }
+  function haptic(){
+    try{ if(WA && WA.HapticFeedback) WA.HapticFeedback.selectionChanged(); }catch(e){}
+  }
+
+  /* ---------- Country/airport data (primary marked) ---------- */
+  // aps: [iata, name, isPrimary]
+  var COUNTRIES = {
+    IL:{name:"Израиль", aps:[["TLV","Тель-Авив",1]]},
+    MD:{name:"Молдова", aps:[["RMO","Кишинёв",1]]},
+    GE:{name:"Грузия", aps:[["TBS","Тбилиси",1]]},
+    GB:{name:"Великобритания", aps:[["LHR","Лондон",1],["LGW","Лондон-Гатвик",0],["STN","Лондон-Станстед",0]]},
+    GR:{name:"Греция", aps:[["ATH","Афины",1],["SKG","Салоники",0]]},
+    CZ:{name:"Чехия", aps:[["PRG","Прага",1]]},
+    ES:{name:"Испания", aps:[["MAD","Мадрид",1],["BCN","Барселона",0]]},
+    HU:{name:"Венгрия", aps:[["BUD","Будапешт",1]]},
+    IT:{name:"Италия", aps:[["FCO","Рим",1],["MXP","Милан",0]]},
+    FR:{name:"Франция", aps:[["CDG","Париж",1],["ORY","Париж-Орли",0]]},
+    DE:{name:"Германия", aps:[["FRA","Франкфурт",1],["MUC","Мюнхен",0],["BER","Берлин",0]]},
+    NL:{name:"Нидерланды", aps:[["AMS","Амстердам",1]]},
+    CY:{name:"Кипр", aps:[["LCA","Ларнака",1],["PFO","Пафос",0]]},
+    TR:{name:"Турция", aps:[["IST","Стамбул",1],["SAW","Стамбул-Сабиха",0]]},
+    AT:{name:"Австрия", aps:[["VIE","Вена",1]]},
+    PL:{name:"Польша", aps:[["WAW","Варшава",1]]},
+    PT:{name:"Португалия", aps:[["LIS","Лиссабон",1],["OPO","Порту",0]]},
+    BG:{name:"Болгария", aps:[["SOF","София",1]]},
+    RO:{name:"Румыния", aps:[["OTP","Бухарест",1]]},
+    HR:{name:"Хорватия", aps:[["SPU","Сплит",1],["DBV","Дубровник",0]]}
+  };
+  var REGIONS = [
+    ["Балканы / Вост. Европа", ["MD","GE","HU","CZ","PL","RO","BG","HR"]],
+    ["Зап. Европа", ["GB","FR","DE","NL","AT"]],
+    ["Юж. Европа", ["GR","ES","IT","PT","CY"]],
+    ["Ближний Восток", ["IL","TR"]]
+  ];
+  // Allowed IATA set (origin validation + datalist)
+  var ALLOWED = {};
+  Object.keys(COUNTRIES).forEach(function(c){
+    COUNTRIES[c].aps.forEach(function(a){ ALLOWED[a[0]] = a[1]+" ("+c+")"; });
+  });
+
+  /* ---------- State ---------- */
+  var state = {
+    origin: "TLV",
+    selected: {},          // iata -> true
+    favorites: [],         // ISO codes
+    durations: {},         // int -> true (chips)
+    pax: 1,
+    stops: "any",
+    dateMode: "r",
+    df: "", dt: "",
+    horizon: 90,
+    priceMode: "c",
+    maxprice: "",
+    topn: 5,
+    trip: "1",
+    model: "g",
+    modelChanged: false
+  };
+
+  /* ---------- Storage (CloudStorage with localStorage fallback) ---------- */
+  var FAV_KEY = "fav_countries";
+  function loadFavorites(cb){
+    if (WA && WA.CloudStorage && WA.CloudStorage.getItem){
+      try{
+        WA.CloudStorage.getItem(FAV_KEY, function(err, val){
+          if(!err && val){ cb(val.split(",").filter(Boolean)); }
+          else { cb(lsFav()); }
+        });
+        return;
+      }catch(e){}
+    }
+    cb(lsFav());
+  }
+  function lsFav(){
+    try{ var v = localStorage.getItem(FAV_KEY); return v ? v.split(",").filter(Boolean) : []; }catch(e){ return []; }
+  }
+  function saveFavorites(){
+    var csv = state.favorites.join(",");
+    try{ localStorage.setItem(FAV_KEY, csv); }catch(e){}
+    if (WA && WA.CloudStorage && WA.CloudStorage.setItem){
+      try{ WA.CloudStorage.setItem(FAV_KEY, csv, function(){}); }catch(e){}
+    }
+  }
+
+  /* ---------- DOM helpers ---------- */
+  function $(id){ return document.getElementById(id); }
+  function el(tag, cls, txt){ var e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e; }
+
+  /* ---------- Datalist for origin ---------- */
+  (function(){
+    var dl = $("airportList");
+    Object.keys(ALLOWED).sort().forEach(function(iata){
+      var o = el("option"); o.value = iata; o.label = ALLOWED[iata]; dl.appendChild(o);
+    });
+  })();
+
+  /* ---------- Build country list ---------- */
+  var countryNodes = {}; // iso -> {row, all(checkbox), aps:{iata:checkbox}, star, apList}
+  function buildCountryList(){
+    var host = $("countryList");
+    host.innerHTML = "";
+
+    var favSet = {}; state.favorites.forEach(function(c){ favSet[c]=true; });
+    var orderedRegions = [];
+    if (state.favorites.length){
+      var favCodes = state.favorites.filter(function(c){ return COUNTRIES[c]; });
+      if(favCodes.length) orderedRegions.push(["⭐ Избранное", favCodes]);
+    }
+    REGIONS.forEach(function(r){
+      var codes = r[1].filter(function(c){ return !favSet[c]; });
+      if (codes.length) orderedRegions.push([r[0], codes]);
+    });
+
+    countryNodes = {};
+    orderedRegions.forEach(function(reg){
+      var rt = el("div","region", reg[0]); host.appendChild(rt);
+      reg[1].forEach(function(iso){ host.appendChild(buildCountryRow(iso)); });
+    });
+    syncAllCheckboxes();
+    applyFilter();
+  }
+
+  function buildCountryRow(iso){
+    var c = COUNTRIES[iso];
+    var row = el("div","crow"); row.dataset.iso = iso; row.dataset.name = c.name.toLowerCase();
+    var head = el("div","crow-head");
+
+    var lab = el("label","cbwrap");
+    var cb = document.createElement("input"); cb.type="checkbox"; cb.dataset.role="all"; cb.dataset.iso=iso;
+    var nm = el("span","name", c.name);
+    lab.appendChild(cb);
+    head.appendChild(lab);
+    head.appendChild(nm);
+
+    var exp = el("button","exp", "аэропорты ▾");
+    head.appendChild(exp);
+
+    var star = el("span","star","☆");
+    star.title = "В избранное";
+    head.appendChild(star);
+
+    row.appendChild(head);
+
+    var apBox = el("div","airports");
+    var apChecks = {};
+    c.aps.forEach(function(a){
+      var iata=a[0], anm=a[1], prim=a[2];
+      var ar = el("div","aprow");
+      var al = el("label","cbwrap");
+      var acb = document.createElement("input"); acb.type="checkbox"; acb.dataset.role="ap"; acb.dataset.iso=iso; acb.dataset.iata=iata;
+      al.appendChild(acb);
+      var anmS = el("span","ap-name"); anmS.appendChild(document.createTextNode(anm+" "));
+      var iS = el("span","iata","("+iata+")"); anmS.appendChild(iS);
+      if(prim){ var p=el("span","prim","основной"); anmS.appendChild(p); }
+      al.appendChild(anmS);
+      ar.appendChild(al);
+      apBox.appendChild(ar);
+      apChecks[iata]=acb;
+      acb.checked = !!state.selected[iata];
+
+      acb.addEventListener("change", function(){
+        if(acb.checked) state.selected[iata]=true; else delete state.selected[iata];
+        haptic();
+        syncCountryAll(iso);
+        updateCounter(); validate();
+      });
+    });
+    row.appendChild(apBox);
+
+    exp.addEventListener("click", function(){
+      apBox.classList.toggle("open");
+      exp.textContent = apBox.classList.contains("open") ? "аэропорты ▴" : "аэропорты ▾";
+    });
+    cb.addEventListener("change", function(){
+      if(cb.checked){
+        var primary = c.aps.filter(function(a){return a[2];})[0] || c.aps[0];
+        var anySelected = c.aps.some(function(a){ return state.selected[a[0]]; });
+        if(!anySelected){ state.selected[primary[0]] = true; }
+      } else {
+        c.aps.forEach(function(a){ delete state.selected[a[0]]; });
+      }
+      c.aps.forEach(function(a){ apChecks[a[0]].checked = !!state.selected[a[0]]; });
+      haptic();
+      syncCountryAll(iso);
+      updateCounter(); validate();
+    });
+    star.addEventListener("click", function(){
+      var idx = state.favorites.indexOf(iso);
+      if(idx>=0) state.favorites.splice(idx,1); else state.favorites.unshift(iso);
+      saveFavorites();
+      haptic();
+      buildCountryList(); // re-order (favorites pinned to top)
+    });
+    if(state.favorites.indexOf(iso)>=0){ star.classList.add("fav"); star.textContent="⭐"; }
+
+    countryNodes[iso] = {row:row, all:cb, aps:apChecks, star:star, apList:c.aps};
+    return row;
+  }
+
+  function syncCountryAll(iso){
+    var n = countryNodes[iso]; if(!n) return;
+    var any = n.apList.some(function(a){ return state.selected[a[0]]; });
+    n.all.checked = any;
+  }
+  function syncAllCheckboxes(){
+    Object.keys(countryNodes).forEach(function(iso){ syncCountryAll(iso); });
+  }
+
+  /* ---------- Counter ---------- */
+  function selectedCount(){ return Object.keys(state.selected).length; }
+  function updateCounter(){
+    var n = selectedCount();
+    var c = $("counter");
+    if(n>8){
+      c.classList.add("warn");
+      c.textContent = "выбрано аэропортов: "+n+" ⚠️ много — поиск дороже";
+    } else {
+      c.classList.remove("warn");
+      c.textContent = "выбрано аэропортов: "+n;
+    }
+  }
+
+  /* ---------- Filter ---------- */
+  function applyFilter(){
+    var q = ($("filter").value||"").trim().toLowerCase();
+    document.querySelectorAll(".crow").forEach(function(r){
+      var ok = !q || r.dataset.name.indexOf(q) >= 0;
+      r.classList.toggle("hidden", !ok);
+    });
+    document.querySelectorAll(".region").forEach(function(rt){
+      var sib = rt.nextElementSibling, anyVisible=false;
+      while(sib && !sib.classList.contains("region")){
+        if(sib.classList.contains("crow") && !sib.classList.contains("hidden")) anyVisible=true;
+        sib = sib.nextElementSibling;
+      }
+      rt.classList.toggle("hidden", !anyVisible);
+    });
+  }
+  $("filter").addEventListener("input", applyFilter);
+
+  /* ---------- Origin ---------- */
+  $("origin").addEventListener("input", function(){
+    state.origin = this.value.toUpperCase().trim();
+    this.value = state.origin;
+    validate();
+  });
+
+  /* ---------- Durations ---------- */
+  (function(){
+    var host = $("durChips");
+    [5,6,7,8,9,10].forEach(function(d){
+      var ch = el("button","chip", String(d)); ch.type="button"; ch.dataset.d=d;
+      ch.addEventListener("click", function(){
+        if(state.durations[d]){ delete state.durations[d]; ch.classList.remove("on"); }
+        else { state.durations[d]=true; ch.classList.add("on"); }
+        haptic(); validate();
+      });
+      host.appendChild(ch);
+    });
+    var custom = el("button","chip","+своё"); custom.type="button";
+    custom.addEventListener("click", function(){
+      var w = $("durCustomWrap");
+      var show = w.style.display==="none";
+      w.style.display = show ? "block" : "none";
+      custom.classList.toggle("on", show);
+      if(!show){ $("durCustom").value=""; }
+      validate();
+    });
+    host.appendChild(custom);
+  })();
+  $("durCustom").addEventListener("input", validate);
+  function allDurations(){
+    var arr = Object.keys(state.durations).map(Number);
+    var cd = parseInt($("durCustom").value,10);
+    if(cd>0 && arr.indexOf(cd)<0) arr.push(cd);
+    arr.sort(function(a,b){return a-b;});
+    return arr;
+  }
+
+  /* ---------- Steppers ---------- */
+  function bindStepper(key, min, max, valEl){
+    document.querySelector('[data-stepper="'+key+'"]').addEventListener("click", function(ev){
+      var b = ev.target.closest("button[data-d]"); if(!b) return;
+      var d = parseInt(b.dataset.d,10);
+      state[key] = Math.max(min, Math.min(max, state[key]+d));
+      valEl.textContent = state[key];
+      haptic(); validate();
+    });
+  }
+  bindStepper("pax",1,9,$("paxVal"));
+  bindStepper("topn",1,10,$("topnVal"));
+
+  /* ---------- Segmented controls ---------- */
+  function bindSeg(segId, stateKey, onChange){
+    var seg = $(segId);
+    seg.addEventListener("click", function(ev){
+      var b = ev.target.closest("button[data-v]"); if(!b) return;
+      seg.querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on");
+      state[stateKey] = b.dataset.v;
+      haptic();
+      if(onChange) onChange(b.dataset.v);
+      validate();
+    });
+  }
+  bindSeg("stopsSeg","stops");
+  bindSeg("dateModeSeg","dateMode", function(v){
+    $("rangeBox").style.display = v==="r" ? "block" : "none";
+    $("horizonBox").style.display = v==="h" ? "block" : "none";
+  });
+  bindSeg("priceSeg","priceMode", function(v){
+    $("thrBox").style.display = v==="t" ? "block" : "none";
+  });
+  bindSeg("tripSeg","trip", function(v){
+    $("durCard").classList.toggle("hidden", v==="0");
+  });
+  (function(){
+    var seg = $("modelSeg");
+    seg.addEventListener("click", function(ev){
+      var b = ev.target.closest("button[data-v]"); if(!b) return;
+      seg.querySelectorAll("button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on");
+      state.model = b.dataset.v;
+      state.modelChanged = true;
+      haptic();
+    });
+  })();
+
+  /* ---------- Model collapse ---------- */
+  $("modelHead").addEventListener("click", function(){
+    this.classList.toggle("open");
+    $("modelBody").classList.toggle("open");
+  });
+
+  /* ---------- Date inputs / presets ---------- */
+  function fmtMMDD(s){
+    s = (s||"").trim();
+    var m = s.match(/^(\d{1,2})\D?(\d{1,2})$/);
+    if(m){ return ("0"+m[1]).slice(-2)+"-"+("0"+m[2]).slice(-2); }
+    return s;
+  }
+  function isMMDD(s){ return /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s); }
+  $("dfrom").addEventListener("input", function(){ state.df=this.value.trim(); validate(); });
+  $("dto").addEventListener("input", function(){ state.dt=this.value.trim(); validate(); });
+  $("dfrom").addEventListener("blur", function(){ this.value=fmtMMDD(this.value); state.df=this.value; validate(); });
+  $("dto").addEventListener("blur", function(){ this.value=fmtMMDD(this.value); state.dt=this.value; validate(); });
+  $("horizon").addEventListener("input", function(){ state.horizon=parseInt(this.value,10)||0; validate(); });
+  $("maxprice").addEventListener("input", function(){ state.maxprice=this.value.trim(); validate(); });
+
+  $("datePresets").addEventListener("click", function(ev){
+    var b = ev.target.closest(".preset"); if(!b) return;
+    if(b.dataset.horizon){
+      $("dateModeSeg").querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x.dataset.v==="h"); });
+      state.dateMode="h"; state.horizon=parseInt(b.dataset.horizon,10);
+      $("horizon").value=state.horizon;
+      $("rangeBox").style.display="none"; $("horizonBox").style.display="block";
+    } else {
+      $("dfrom").value=b.dataset.from; $("dto").value=b.dataset.to;
+      state.df=b.dataset.from; state.dt=b.dataset.to;
+    }
+    haptic(); validate();
+  });
+
+  /* ---------- Helpers ---------- */
+  function byteLen(s){
+    return (typeof TextEncoder!=="undefined") ? new TextEncoder().encode(s).length : unescape(encodeURIComponent(s)).length;
+  }
+  function isOneway(){ return state.trip==="0"; }
+
+  /* ---------- Payload ---------- */
+  function buildPayload(){
+    var p = { v:1 };
+    p.o = state.origin;
+    p.d = Object.keys(state.selected);
+    var rt = isOneway() ? 0 : 1;
+    if(rt){
+      var durs = allDurations();
+      if(durs.length) p.dur = durs;
+    }
+    p.pax = state.pax;
+    if(state.stops!=="any") p.st = state.stops; else p.st = "any";
+    p.rt = rt;
+    if(state.dateMode==="r"){
+      p.dm = "r";
+      p.df = fmtMMDD(state.df);
+      p.dt = fmtMMDD(state.dt);
+    } else {
+      p.dm = "h";
+      p.hd = state.horizon;
+    }
+    if(state.priceMode==="t"){ p.pm="t"; p.mx=parseInt(state.maxprice,10); }
+    else { p.pm="c"; }
+    p.n = state.topn;
+    if(state.modelChanged){ p.m = state.model; }
+    return p;
+  }
+
+  /* ---------- Validation ---------- */
+  function validate(){
+    var ok = true;
+    var oErr = $("originErr"); oErr.textContent="";
+    if(!ALLOWED[state.origin]){ oErr.textContent="Неизвестный код аэропорта"; ok=false; }
+
+    if(selectedCount()<1){ ok=false; }
+
+    var dErr=$("durErr"); dErr.textContent="";
+    if(!isOneway()){
+      if(allDurations().length<1){ dErr.textContent="Выбери хотя бы одну длительность"; ok=false; }
+    }
+
+    var rErr=$("rangeErr"); rErr.textContent="";
+    var hErr=$("horizonErr"); hErr.textContent="";
+    if(state.dateMode==="r"){
+      if(!isMMDD(fmtMMDD(state.df)) || !isMMDD(fmtMMDD(state.dt))){
+        if(state.df||state.dt) rErr.textContent="Формат ММ-ДД, напр. 07-01";
+        ok=false;
+      }
+    } else {
+      if(!(state.horizon>0)){ hErr.textContent="Укажи число дней"; ok=false; }
+    }
+
+    var tErr=$("thrErr"); tErr.textContent="";
+    if(state.priceMode==="t"){
+      if(!(parseInt(state.maxprice,10)>0)){ tErr.textContent="Укажи цену > 0"; ok=false; }
+    }
+
+    var bytes = 0;
+    try{ bytes = byteLen("/search "+JSON.stringify(buildPayload())); }catch(e){ bytes=0; }
+    if(bytes>=4000){ ok=false; }
+
+    setSubmit(ok);
+    return ok;
+  }
+
+  /* ---------- Submit ---------- */
+  function doSubmit(){
+    if(!validate()) return;
+    var payload = buildPayload();
+    var text = "/search " + JSON.stringify(payload);
+    if(byteLen(text)>=4000){
+      alertMsg("Слишком много данных, убери часть направлений.");
+      return;
+    }
+    if(WA && WA.openTelegramLink){
+      try{ if(WA.HapticFeedback) WA.HapticFeedback.impactOccurred("medium"); }catch(e){}
+      WA.openTelegramLink("https://t.me/"+BOT+"?text="+encodeURIComponent(text));
+    } else {
+      showFallback(text);
+    }
+  }
+  function alertMsg(m){
+    if(WA && WA.showAlert){ try{ WA.showAlert(m); return; }catch(e){} }
+    alert(m);
+  }
+  function showFallback(text){
+    var box=$("fallback"); box.style.display="block";
+    $("fallbackText").value=text;
+    box.scrollIntoView({behavior:"smooth", block:"start"});
+  }
+  $("copyBtn").addEventListener("click", function(){
+    var ta=$("fallbackText"); ta.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    if(navigator.clipboard){ try{ navigator.clipboard.writeText(ta.value); }catch(e){} }
+    this.textContent="✅ Скопировано";
+    var self=this; setTimeout(function(){ self.textContent="📋 Копировать"; }, 1500);
+  });
+
+  /* ---------- MainButton vs DOM button ---------- */
+  var usingMain = false;
+  function initSubmitUI(){
+    if(WA && WA.MainButton){
+      usingMain = true;
+      try{
+        WA.MainButton.setText("🔎 Искать");
+        WA.MainButton.onClick(doSubmit);
+        WA.MainButton.hide();
+      }catch(e){ usingMain=false; }
+    }
+    if(!usingMain){
+      var b=$("domBtn"); b.style.display="block";
+      b.addEventListener("click", doSubmit);
+    }
+  }
+  function setSubmit(enabled){
+    if(usingMain && WA && WA.MainButton){
+      try{
+        if(enabled){ WA.MainButton.enable(); }
+        else { WA.MainButton.disable(); }
+        WA.MainButton.show();
+      }catch(e){}
+    } else {
+      var b=$("domBtn"); if(b) b.disabled=!enabled;
+    }
+  }
+
+  /* ---------- Init ---------- */
+  loadFavorites(function(favs){
+    state.favorites = favs || [];
+    buildCountryList();
+    updateCounter();
+    initSubmitUI();
+    validate();
+  });
+})();
+</script>
+</body>
+</html>
