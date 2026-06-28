@@ -126,8 +126,8 @@
 </head>
 <body>
 
-<h1>✈️ Поиск авиабилетов</h1>
-<p class="lead">Заполни форму и нажми «Искать». Откроется чат — нажми «Отправить», чтобы запустить поиск.</p>
+<h1>✈️ Поиск авиабилетов <span style="font-size:12px;color:var(--hint);font-weight:400">v3</span></h1>
+<p class="lead">Заполни форму и нажми «Искать» — внизу появится готовая команда. Скопируй её, вставь в чат боту и нажми «Отправить».</p>
 
 <!-- desktop / QA fallback box -->
 <div id="fallback" class="card">
@@ -714,16 +714,24 @@
   }
 
   /* ---------- Submit ---------- */
+  function missingReasons(){
+    var m=[];
+    if(!ALLOWED[state.origin]) m.push("город вылета");
+    if(selectedCount()<1) m.push("хотя бы одно направление");
+    if(!isOneway() && allDurations().length<1) m.push("длительность");
+    if(state.dateMode==="r"){ if(!isMMDD(fmtMMDD(state.df))||!isMMDD(fmtMMDD(state.dt))) m.push("даты (с/по)"); }
+    else { if(!(state.horizon>0)) m.push("горизонт (дней)"); }
+    if(state.priceMode==="t" && !(parseInt(state.maxprice,10)>0)) m.push("цену (порог)");
+    return m;
+  }
   function doSubmit(){
-    if(!validate()) return;
+    var miss = missingReasons();
+    if(miss.length){ alertMsg("Заполни: " + miss.join(", ")); return; }
     var payload = buildPayload();
     var text = "/search " + JSON.stringify(payload);
-    if(byteLen(text)>=4000){
-      alertMsg("Слишком много данных, убери часть направлений.");
-      return;
-    }
+    if(byteLen(text)>=4000){ alertMsg("Слишком много направлений — убери часть."); return; }
     try{ if(WA && WA.HapticFeedback) WA.HapticFeedback.impactOccurred("medium"); }catch(e){}
-    // Telegram игнорирует ?text= для ботов, поэтому надёжный путь — показать команду и скопировать в буфер.
+    // Telegram игнорирует ?text= для ботов → надёжный путь: показать команду и скопировать в буфер.
     var copied=false;
     try{ if(navigator.clipboard){ navigator.clipboard.writeText(text); copied=true; } }catch(e){}
     showFallback(text, copied);
@@ -747,31 +755,15 @@
   });
 
   /* ---------- MainButton vs DOM button ---------- */
-  var usingMain = false;
   function initSubmitUI(){
-    if(WA && WA.MainButton){
-      usingMain = true;
-      try{
-        WA.MainButton.setText("🔎 Искать");
-        WA.MainButton.onClick(doSubmit);
-        WA.MainButton.hide();
-      }catch(e){ usingMain=false; }
-    }
-    if(!usingMain){
-      var b=$("domBtn"); b.style.display="block";
-      b.addEventListener("click", doSubmit);
-    }
+    // Намеренно используем ТОЛЬКО видимую кнопку в странице (нативный MainButton ведёт себя по-разному в клиентах).
+    var b=$("domBtn");
+    b.style.display="block";
+    b.disabled=false;
+    b.addEventListener("click", doSubmit);
   }
   function setSubmit(enabled){
-    if(usingMain && WA && WA.MainButton){
-      try{
-        if(enabled){ WA.MainButton.enable(); }
-        else { WA.MainButton.disable(); }
-        WA.MainButton.show();
-      }catch(e){}
-    } else {
-      var b=$("domBtn"); if(b) b.disabled=!enabled;
-    }
+    // Кнопка всегда активна; если что-то не заполнено — doSubmit подскажет, что именно.
   }
 
   /* ---------- Init ---------- */
