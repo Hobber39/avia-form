@@ -126,7 +126,7 @@
 </head>
 <body>
 
-<h1>✈️ Поиск авиабилетов <span style="font-size:12px;color:var(--hint);font-weight:400">v4</span></h1>
+<h1>✈️ Поиск авиабилетов <span style="font-size:12px;color:var(--hint);font-weight:400">v5</span></h1>
 <p class="lead">Заполни форму и нажми «Искать» — внизу появится готовая команда. Скопируй её, вставь в чат боту и нажми «Отправить».</p>
 
 <!-- desktop / QA fallback box -->
@@ -199,12 +199,12 @@
   <div id="rangeBox" class="row-gap">
     <div class="two">
       <div>
-        <label class="fld" for="dfrom">с (ММ-ДД)</label>
-        <input type="text" id="dfrom" placeholder="07-01" maxlength="5" inputmode="numeric" autocomplete="off">
+        <label class="fld" for="dfrom">с (ММ-ДД, можно без тире: 0701)</label>
+        <input type="text" id="dfrom" placeholder="07-01 или 0701" maxlength="5" inputmode="numeric" autocomplete="off">
       </div>
       <div>
-        <label class="fld" for="dto">по (ММ-ДД)</label>
-        <input type="text" id="dto" placeholder="08-31" maxlength="5" inputmode="numeric" autocomplete="off">
+        <label class="fld" for="dto">по (ММ-ДД, можно без тире: 0831)</label>
+        <input type="text" id="dto" placeholder="08-31 или 0831" maxlength="5" inputmode="numeric" autocomplete="off">
       </div>
     </div>
     <div class="presets" id="datePresets">
@@ -361,6 +361,69 @@
     if (WA && WA.CloudStorage && WA.CloudStorage.setItem){
       try{ WA.CloudStorage.setItem(FAV_KEY, csv, function(){}); }catch(e){}
     }
+  }
+
+  /* ---------- Запоминание всей формы ---------- */
+  var FORM_KEY = "form_state";
+  var _saveT = null;
+  function formSnapshot(){
+    return JSON.stringify({
+      origin:state.origin, selected:state.selected, durations:state.durations,
+      pax:state.pax, stops:state.stops, dateMode:state.dateMode, df:state.df, dt:state.dt,
+      horizon:state.horizon, priceMode:state.priceMode, maxprice:state.maxprice,
+      topn:state.topn, trip:state.trip, model:state.model
+    });
+  }
+  function scheduleSave(){
+    try{ localStorage.setItem(FORM_KEY, formSnapshot()); }catch(e){}
+    if(_saveT) clearTimeout(_saveT);
+    _saveT = setTimeout(function(){
+      if(WA && WA.CloudStorage && WA.CloudStorage.setItem){ try{ WA.CloudStorage.setItem(FORM_KEY, formSnapshot(), function(){}); }catch(e){} }
+    }, 800);
+  }
+  function loadForm(cb){
+    if(WA && WA.CloudStorage && WA.CloudStorage.getItem){
+      try{ WA.CloudStorage.getItem(FORM_KEY, function(err,val){ cb(_parseForm(val) || _lsForm()); }); return; }catch(e){}
+    }
+    cb(_lsForm());
+  }
+  function _lsForm(){ try{ return _parseForm(localStorage.getItem(FORM_KEY)); }catch(e){ return null; } }
+  function _parseForm(v){ if(!v) return null; try{ return JSON.parse(v); }catch(e){ return null; } }
+  function applyForm(f){
+    if(!f) return;
+    if(f.origin) state.origin=f.origin;
+    if(f.selected && typeof f.selected==="object") state.selected=f.selected;
+    if(f.durations && typeof f.durations==="object") state.durations=f.durations;
+    if(typeof f.pax==="number") state.pax=f.pax;
+    if(f.stops) state.stops=f.stops;
+    if(f.dateMode) state.dateMode=f.dateMode;
+    if(f.df!=null) state.df=f.df;
+    if(f.dt!=null) state.dt=f.dt;
+    if(typeof f.horizon==="number") state.horizon=f.horizon;
+    if(f.priceMode) state.priceMode=f.priceMode;
+    if(f.maxprice!=null) state.maxprice=f.maxprice;
+    if(typeof f.topn==="number") state.topn=f.topn;
+    if(f.trip) state.trip=f.trip;
+    if(f.model) state.model=f.model;
+    state.modelChanged=false;   // восстановленную модель не пере-применяем, пока не тронут вручную
+  }
+  function applyStateToUI(){
+    $("origin").value = state.origin || "TLV";
+    document.querySelectorAll("#durChips .chip").forEach(function(ch){
+      if(ch.dataset.d){ ch.classList.toggle("on", !!state.durations[ch.dataset.d]); }
+    });
+    if($("paxVal")) $("paxVal").textContent = state.pax;
+    if($("topnVal")) $("topnVal").textContent = state.topn;
+    function seg(id,val){ var s=$(id); if(!s) return; s.querySelectorAll("button").forEach(function(b){ b.classList.toggle("on", b.dataset.v===String(val)); }); }
+    seg("stopsSeg", state.stops); seg("dateModeSeg", state.dateMode); seg("priceSeg", state.priceMode); seg("tripSeg", state.trip); seg("modelSeg", state.model);
+    if($("dfrom")) $("dfrom").value = state.df||"";
+    if($("dto")) $("dto").value = state.dt||"";
+    if($("horizon")) $("horizon").value = state.horizon||90;
+    if($("maxprice")) $("maxprice").value = state.maxprice||"";
+    if($("rangeBox")) $("rangeBox").style.display = state.dateMode==="r" ? "block" : "none";
+    if($("horizonBox")) $("horizonBox").style.display = state.dateMode==="h" ? "block" : "none";
+    if($("thrBox")) $("thrBox").style.display = state.priceMode==="t" ? "block" : "none";
+    if($("durCard")) $("durCard").classList.toggle("hidden", state.trip==="0");
   }
 
   /* ---------- DOM helpers ---------- */
@@ -621,8 +684,14 @@
     return s;
   }
   function isMMDD(s){ return /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s); }
-  $("dfrom").addEventListener("input", function(){ state.df=this.value.trim(); validate(); });
-  $("dto").addEventListener("input", function(){ state.dt=this.value.trim(); validate(); });
+  function liveDate(elm, key){
+    var dig = (elm.value||"").replace(/\D/g,"").slice(0,4);   // только цифры ММДД, тире вставляем сами
+    elm.value = (dig.length>2) ? (dig.slice(0,2)+"-"+dig.slice(2)) : dig;
+    state[key] = elm.value;
+    validate();
+  }
+  $("dfrom").addEventListener("input", function(){ liveDate(this,"df"); });
+  $("dto").addEventListener("input", function(){ liveDate(this,"dt"); });
   $("dfrom").addEventListener("blur", function(){ this.value=fmtMMDD(this.value); state.df=this.value; validate(); });
   $("dto").addEventListener("blur", function(){ this.value=fmtMMDD(this.value); state.dt=this.value; validate(); });
   $("horizon").addEventListener("input", function(){ state.horizon=parseInt(this.value,10)||0; validate(); });
@@ -710,6 +779,7 @@
     if(bytes>=4000){ ok=false; }
 
     setSubmit(ok);
+    scheduleSave();
     return ok;
   }
 
@@ -769,10 +839,14 @@
   /* ---------- Init ---------- */
   loadFavorites(function(favs){
     state.favorites = favs || [];
-    buildCountryList();
-    updateCounter();
-    initSubmitUI();
-    validate();
+    loadForm(function(f){
+      applyForm(f);
+      applyStateToUI();
+      buildCountryList();
+      updateCounter();
+      initSubmitUI();
+      validate();
+    });
   });
 })();
 </script>
