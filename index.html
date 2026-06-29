@@ -126,7 +126,7 @@
 </head>
 <body>
 
-<h1>✈️ Поиск авиабилетов <span style="font-size:12px;color:var(--hint);font-weight:400">v3</span></h1>
+<h1>✈️ Поиск авиабилетов <span style="font-size:12px;color:var(--hint);font-weight:400">v4</span></h1>
 <p class="lead">Заполни форму и нажми «Искать» — внизу появится готовая команда. Скопируй её, вставь в чат боту и нажми «Отправить».</p>
 
 <!-- desktop / QA fallback box -->
@@ -183,9 +183,9 @@
 <div class="card">
   <div class="sec-title">🔁 Пересадки</div>
   <div class="seg" id="stopsSeg">
-    <button type="button" data-v="0">Прямые</button>
+    <button type="button" data-v="0" class="on">Прямые</button>
     <button type="button" data-v="1">1 пересадка</button>
-    <button type="button" data-v="any" class="on">Любые</button>
+    <button type="button" data-v="any">Любые</button>
   </div>
 </div>
 
@@ -326,7 +326,7 @@
     favorites: [],         // ISO codes
     durations: {},         // int -> true (chips)
     pax: 1,
-    stops: "any",
+    stops: "0",
     dateMode: "r",
     df: "", dt: "",
     horizon: 90,
